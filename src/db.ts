@@ -9,6 +9,9 @@ export function getDb(): Database.Database {
     dbInstance = new Database(config.dbPath);
     dbInstance.pragma('journal_mode = WAL');
     dbInstance.pragma('synchronous = NORMAL');
+    dbInstance.pragma('cache_size = -2000'); // Ограничение кэша SQLite в 2 Мб RAM
+    dbInstance.pragma('temp_store = MEMORY');
+    dbInstance.pragma('mmap_size = 0'); // Минимизация виртуальной памяти на слабых VPS
 
     dbInstance.exec(`
       CREATE TABLE IF NOT EXISTS seen_ads (

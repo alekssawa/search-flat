@@ -218,6 +218,7 @@ export async function fetchApartmentsWithCount(
     method: 'POST',
     headers,
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!response.ok) {
@@ -301,6 +302,7 @@ export async function checkAdvertState(adId: string): Promise<AdvertStateResult>
         query: CHECK_AD_QUERY,
         variables: { input: { id: adId } },
       }),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {
