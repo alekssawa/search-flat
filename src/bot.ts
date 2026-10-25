@@ -31,7 +31,9 @@ import { fetchAllApartments } from './api.js';
 
 let botInstance: Bot | null = null;
 let triggerCheckHandler: (() => Promise<{ totalChecked: number; newFound: number }>) | null = null;
-let triggerCleanupHandler: (() => Promise<{ total: number; removed: number }>) | null = null;
+let triggerCleanupHandler: (
+  (onProgress?: (checked: number, total: number, removed: number) => Promise<void> | void) => Promise<{ total: number; removed: number }>
+) | null = null;
 
 export async function ensureAdTranslated(ad: FlatAd): Promise<FlatAd> {
   if (ad.description && !ad.isTranslated && isRomanianText(ad.description)) {
@@ -50,7 +52,7 @@ export async function ensureAdTranslated(ad: FlatAd): Promise<FlatAd> {
 
 export function registerTriggerHandlers(
   onCheck: () => Promise<{ totalChecked: number; newFound: number }>,
-  onCleanup: () => Promise<{ total: number; removed: number }>
+  onCleanup: (onProgress?: (checked: number, total: number, removed: number) => Promise<void> | void) => Promise<{ total: number; removed: number }>
 ) {
   triggerCheckHandler = onCheck;
   triggerCleanupHandler = onCleanup;
@@ -567,10 +569,26 @@ export function getBot(): Bot {
 
     botInstance.command('cleanup', async (ctx) => {
       await runSingleViewCommand(ctx, 'cleanup', async () => {
-        const msg = await ctx.reply('🧹 Проверяю базу на актуальность (AD_STATE_HIDDEN и удаленные)...');
+        const msg = await ctx.reply('⏳ Начинаю проверку базы на актуальность...');
         if (triggerCleanupHandler) {
           try {
-            const stats = await triggerCleanupHandler();
+            let lastReportTime = 0;
+            const stats = await triggerCleanupHandler(async (checked, total, removed) => {
+              const now = Date.now();
+              if (now - lastReportTime >= 1500 || checked >= total) {
+                lastReportTime = now;
+                try {
+                  await ctx.api.editMessageText(
+                    ctx.chat.id,
+                    msg.message_id,
+                    `🧹 <b>Проверка базы на актуальность...</b>\n\n` +
+                    `⏳ Проверено: <b>${checked}</b> из <b>${total}</b>\n` +
+                    `🗑 Найдено неактуальных: <b>${removed}</b>`,
+                    { parse_mode: 'HTML' }
+                  );
+                } catch {}
+              }
+            });
             if (stats.removed === 0) {
               await ctx.api.editMessageText(
                 ctx.chat.id,

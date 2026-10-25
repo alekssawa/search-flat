@@ -102,7 +102,9 @@ export async function checkApartments(): Promise<{ totalChecked: number; newFoun
   }
 }
 
-export async function runDailyCleanup(): Promise<{ total: number; removed: number }> {
+export async function runDailyCleanup(
+  onProgress?: (checked: number, total: number, removed: number) => Promise<void> | void
+): Promise<{ total: number; removed: number }> {
   if (isCleanupRunning) {
     console.log('[Очистка базы] Очистка уже выполняется.');
     return { total: 0, removed: 0 };
@@ -113,14 +115,19 @@ export async function runDailyCleanup(): Promise<{ total: number; removed: numbe
 
   const ids = getAllSeenAdIds();
   let removedCount = 0;
+  let checkedCount = 0;
 
   try {
     for (const id of ids) {
+      checkedCount++;
       const state = await checkAdvertState(id);
       if (state !== 'PUBLIC') {
         console.log(`[Очистка базы] Объявление ${id} неактивно (${state}). Удаляем из базы.`);
         removeSeenAd(id);
         removedCount++;
+      }
+      if (onProgress) {
+        await onProgress(checkedCount, ids.length, removedCount);
       }
       // Небольшая задержка 80мс между запросами, чтобы не нагружать 999.md
       await new Promise((r) => setTimeout(r, 80));
