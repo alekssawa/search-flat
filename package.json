@@ -1,0 +1,27 @@
+{
+  "name": "search-flat",
+  "version": "1.0.0",
+  "description": "Telegram bot monitoring 999.md flat listings with low memory footprint",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node --max-old-space-size=128 dist/index.js",
+    "test:fetch": "tsx scripts/test-fetch.ts"
+  },
+  "keywords": ["999.md", "telegram-bot", "flat-search", "grammy"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "dotenv": "^16.4.7",
+    "grammy": "^1.35.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.13.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}

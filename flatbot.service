@@ -1,0 +1,16 @@
+[Unit]
+Description=999.md Telegram Apartment Monitor Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+# Путь к папке проекта на сервере (замените при необходимости)
+WorkingDirectory=/root/search-flat
+ExecStart=/usr/bin/node --max-old-space-size=128 dist/index.js
+Restart=always
+RestartSec=15
+MemoryMax=160M
+
+[Install]
+WantedBy=multi-user.target
