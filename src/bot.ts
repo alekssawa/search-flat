@@ -30,7 +30,7 @@ import { isRomanianText, translateRoToRu } from './translator.js';
 import { fetchAllApartments } from './api.js';
 
 let botInstance: Bot | null = null;
-let triggerCheckHandler: (() => Promise<{ totalChecked: number; newFound: number }>) | null = null;
+let triggerCheckHandler: (() => Promise<{ totalChecked: number; newFound: number; massSaved?: number }>) | null = null;
 let triggerCleanupHandler: (
   (onProgress?: (checked: number, total: number, removed: number) => Promise<void> | void) => Promise<{ total: number; removed: number }>
 ) | null = null;
@@ -51,7 +51,7 @@ export async function ensureAdTranslated(ad: FlatAd): Promise<FlatAd> {
 }
 
 export function registerTriggerHandlers(
-  onCheck: () => Promise<{ totalChecked: number; newFound: number }>,
+  onCheck: () => Promise<{ totalChecked: number; newFound: number; massSaved?: number }>,
   onCleanup: (onProgress?: (checked: number, total: number, removed: number) => Promise<void> | void) => Promise<{ total: number; removed: number }>
 ) {
   triggerCheckHandler = onCheck;
@@ -537,7 +537,14 @@ export function getBot(): Bot {
         if (triggerCheckHandler) {
           try {
             const stats = await triggerCheckHandler();
-            if (stats.newFound === 0) {
+            if (stats.massSaved && stats.massSaved > 0) {
+              await ctx.api.editMessageText(
+                ctx.chat.id,
+                msg.message_id,
+                `📦 <b>Обнаружено ${stats.massSaved} объявлений по обновленному фильтру.</b>\n\nВсе они сохранены в базу без спама в чат.\nПосмотреть: <b>/browse</b> или <b>/list</b>.`,
+                { parse_mode: 'HTML' }
+              );
+            } else if (stats.newFound === 0) {
               await ctx.api.editMessageText(
                 ctx.chat.id,
                 msg.message_id,

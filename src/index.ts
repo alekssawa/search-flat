@@ -16,7 +16,7 @@ import { getBot, sendAdToTelegram, setupBotCommands, registerTriggerHandlers } f
 let isPollingRunning = false;
 let isCleanupRunning = false;
 
-export async function checkApartments(): Promise<{ totalChecked: number; newFound: number }> {
+export async function checkApartments(): Promise<{ totalChecked: number; newFound: number; massSaved?: number }> {
   if (isPollingRunning) {
     console.log(`[${new Date().toLocaleTimeString()}] Предыдущий цикл проверки еще выполняется, пропускаем.`);
     return { totalChecked: 0, newFound: 0 };
@@ -46,34 +46,41 @@ export async function checkApartments(): Promise<{ totalChecked: number; newFoun
     const newAds = reversedAds.filter((ad) => !isAdSeen(ad.id));
 
     // ЗАЩИТА ОТ СПАМА ПРИ СМЕНЕ ФИЛЬТРОВ:
-    // Если после изменения фильтра (например, 200€) появилось сразу много квартир,
-    // отправляем в чат максимум 3 самых свежих, а остальные тихо сохраняем в базу для /browse
+    // Если после изменения фильтра появилось сразу много квартир (> 3),
+    // не отправляем квартиры в чат, а тихо сохраняем в базу.
+    // Пользователь может полистать их через /browse или /list.
+    // Отправляем лишь сервисную плашку, которая сама удаляется через 1 минуту.
     const MAX_ALERTS_PER_CHECK = 3;
 
     let newAdsCount = 0;
 
     if (newAds.length > MAX_ALERTS_PER_CHECK) {
-      console.log(`[Защита от спама] Обнаружено ${newAds.length} новых квартир. Отправляем в чат только последние ${MAX_ALERTS_PER_CHECK}, остальные сохраняем в базу.`);
+      console.log(`[Защита от спама] Обнаружено ${newAds.length} новых квартир (смена фильтра или массовое поступление). Сохраняем в базу без отправки в чат.`);
       
       // Сразу помечаем все новые как просмотренные в БД
       markManyAdsAsSeen(newAds.map((a) => a.id));
 
-      // Отправляем только топ-3 самых свежих
-      const adsToSend = newAds.slice(-MAX_ALERTS_PER_CHECK);
-      for (const ad of adsToSend) {
-        await sendAdToTelegram(ad);
-        newAdsCount++;
-        await new Promise((r) => setTimeout(r, 1500));
+      const bot = getBot();
+      try {
+        const infoMsg = await bot.api.sendMessage(
+          config.targetChatId,
+          `ℹ️ <b>Обнаружено ${newAds.length} новых объявлений по фильтрам.</b>\n\n` +
+          `Все они тихо сохранены в базу данных без спама в чат.\n` +
+          `Вы можете посмотреть их через <b>/browse</b> (карусель) или <b>/list</b> (список).`,
+          { parse_mode: 'HTML' }
+        );
+
+        // Автоматически удаляем сервисное сообщение через 60 секунд
+        setTimeout(async () => {
+          try {
+            await bot.api.deleteMessage(config.targetChatId, infoMsg.message_id);
+          } catch {}
+        }, 60000);
+      } catch (err) {
+        console.error('Ошибка отправки сервисного сообщения в чат:', err);
       }
 
-      const bot = getBot();
-      await bot.api.sendMessage(
-        config.targetChatId,
-        `ℹ️ <i>Обнаружено ${newAds.length} объявлений по обновленному фильтру (от 200€).\n` +
-        `Чтобы не заспамить чат, присланы только ${MAX_ALERTS_PER_CHECK} самые свежие, а все остальные сохранены в базу.\n` +
-        `Вы можете полистать их в карусели <b>/browse</b> или посмотреть списком <b>/list</b>.</i>`,
-        { parse_mode: 'HTML' }
-      );
+      return { totalChecked: ads.length, newFound: 0, massSaved: newAds.length };
     } else {
       for (const ad of newAds) {
         console.log(`[Новое объявление] ${ad.id}: "${ad.title}" - ${ad.price} (${ad.images.length} фото)`);
