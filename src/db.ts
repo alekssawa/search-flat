@@ -1,12 +1,54 @@
 import Database from 'better-sqlite3';
+import fs from 'fs';
 import { config } from './config.js';
 import { FlatAd } from './types.js';
 
 let dbInstance: Database.Database | null = null;
 
+function openDatabaseWithAutoRecovery(dbPath: string): Database.Database {
+  let db: Database.Database | null = null;
+  try {
+    db = new Database(dbPath);
+    // Проверка целостности существующей базы при открытии
+    const check = db.pragma('quick_check') as Array<{ quick_check: string }>;
+    if (check.length > 0 && check[0].quick_check !== 'ok') {
+      throw new Error(`quick_check failed: ${check[0].quick_check}`);
+    }
+    return db;
+  } catch (err: any) {
+    if (
+      err?.code === 'SQLITE_CORRUPT' ||
+      err?.code === 'SQLITE_NOTADB' ||
+      String(err?.message).includes('malformed')
+    ) {
+      console.error(`⚠️ Обнаружено повреждение базы данных (${dbPath}): ${err.message}`);
+      try {
+        if (db && db.open) db.close();
+      } catch {}
+
+      const backupPath = `${dbPath}.corrupt.${Date.now()}`;
+      console.log(`📦 Поврежденный файл сохранен в резервную копию: ${backupPath}`);
+      try {
+        if (fs.existsSync(dbPath)) fs.renameSync(dbPath, backupPath);
+        for (const ext of ['-wal', '-shm']) {
+          if (fs.existsSync(dbPath + ext)) {
+            try { fs.unlinkSync(dbPath + ext); } catch {}
+          }
+        }
+      } catch (fsErr) {
+        console.error('Не удалось переместить поврежденную базу:', fsErr);
+      }
+
+      console.log('🔄 Автоматически создаем чистую базу данных...');
+      return new Database(dbPath);
+    }
+    throw err;
+  }
+}
+
 export function getDb(): Database.Database {
   if (!dbInstance) {
-    dbInstance = new Database(config.dbPath);
+    dbInstance = openDatabaseWithAutoRecovery(config.dbPath);
     dbInstance.pragma('journal_mode = WAL');
     dbInstance.pragma('synchronous = NORMAL');
     dbInstance.pragma('cache_size = -2000'); // Ограничение кэша SQLite в 2 Мб RAM

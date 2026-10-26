@@ -114,6 +114,11 @@ export function getBot(): Bot {
   if (!botInstance) {
     botInstance = new Bot(config.botToken);
 
+    // Глобальный перехват ошибок для предотвращения падения процесса
+    botInstance.catch((err) => {
+      console.error(`[Telegram Error] Ошибка в обработчике обновления ${err.ctx?.update?.update_id}:`, err.error);
+    });
+
     // Удаление квартиры из чата
     botInstance.callbackQuery(/^del:(.+)$/, async (ctx) => {
       const adId = ctx.match[1];
