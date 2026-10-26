@@ -10,6 +10,8 @@ import {
 } from './formatter.js';
 import {
   getSeenCount,
+  getTrashCount,
+  getActiveAdsCount,
   saveSentMessageIds,
   getSentMessageIds,
   deleteSentMessageRecord,
@@ -472,9 +474,11 @@ export function getBot(): Bot {
     botInstance.command('status', async (ctx) => {
       await runSingleViewCommand(ctx, 'status', async () => {
         const seenCount = getSeenCount();
+        const activeCount = getActiveAdsCount();
+        const trashCount = getTrashCount();
         return await ctx.reply(
           `📊 <b>Статус мониторинга:</b>\n\n` +
-          `• Квартир сохранено в базе: <b>${seenCount}</b>\n` +
+          `• Квартир сохранено в базе: <b>${seenCount}</b> (активных: ${activeCount}, в корзине: ${trashCount})\n` +
           `• Интервал автопроверки: <b>${config.pollIntervalMinutes} мин.</b>\n` +
           `• Фильтры: <b>1-2 комнаты, 200 - 450 EUR, Кишинёв мун.</b>\n` +
           `• Бот работает штатно.`,

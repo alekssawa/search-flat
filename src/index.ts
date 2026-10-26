@@ -2,6 +2,7 @@ import { config, validateBotConfig } from './config.js';
 import { fetchApartmentsWithCount, checkAdvertState } from './api.js';
 import {
   isAdSeen,
+  isAdDeleted,
   markAdAsSeen,
   markManyAdsAsSeen,
   getSeenCount,
@@ -43,7 +44,7 @@ export async function checkApartments(): Promise<{ totalChecked: number; newFoun
 
     // Идем от старых к новым (хронологический порядок)
     const reversedAds = [...ads].reverse();
-    const newAds = reversedAds.filter((ad) => !isAdSeen(ad.id));
+    const newAds = reversedAds.filter((ad) => !isAdSeen(ad.id) && !isAdDeleted(ad.id));
 
     // ЗАЩИТА ОТ СПАМА ПРИ СМЕНЕ ФИЛЬТРОВ:
     // Если после изменения фильтра появилось сразу много квартир (> 3),

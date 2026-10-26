@@ -10,7 +10,7 @@ export const config = {
   initialSkipExisting: process.env.INITIAL_SKIP_EXISTING !== 'false',
   accessToken: process.env.ACCESS_TOKEN || '',
   authHeader: process.env.AUTH_HEADER || '',
-  dbPath: path.resolve(process.cwd(), 'flats.db'),
+  dbPath: path.resolve(process.cwd(), process.env.DB_PATH || 'flats.db'),
 };
 
 export function validateBotConfig(): void {

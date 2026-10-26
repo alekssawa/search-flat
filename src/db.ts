@@ -98,9 +98,62 @@ export function getAllSeenAdIds(): string[] {
   return rows.map((r) => r.id);
 }
 
+let saveAdStmt: Database.Statement | null = null;
+
+function getSaveAdStmt(): Database.Statement {
+  if (!saveAdStmt) {
+    const db = getDb();
+    saveAdStmt = db.prepare(`
+      INSERT INTO ads_cache (
+        id, title, price, url, images, description, author, agency,
+        rooms, area, floor, address, date, pets, amenities, is_translated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        title = excluded.title,
+        price = excluded.price,
+        url = excluded.url,
+        images = excluded.images,
+        description = CASE
+          WHEN excluded.is_translated = 1 THEN excluded.description
+          WHEN ads_cache.is_translated = 1 THEN ads_cache.description
+          ELSE excluded.description
+        END,
+        author = excluded.author,
+        agency = excluded.agency,
+        rooms = excluded.rooms,
+        area = excluded.area,
+        floor = excluded.floor,
+        address = excluded.address,
+        date = excluded.date,
+        pets = excluded.pets,
+        amenities = excluded.amenities,
+        is_translated = CASE
+          WHEN excluded.is_translated = 1 THEN 1
+          WHEN ads_cache.is_translated = 1 THEN 1
+          ELSE 0
+        END
+    `);
+  }
+  return saveAdStmt;
+}
+
+export function isAdDeleted(id: string): boolean {
+  const db = getDb();
+  const stmt = db.prepare('SELECT 1 FROM ads_cache WHERE id = ? AND is_deleted = 1');
+  return !!stmt.get(id);
+}
+
 export function markAdAsDeleted(id: string): void {
   const db = getDb();
-  db.prepare('UPDATE ads_cache SET is_deleted = 1 WHERE id = ?').run(id);
+  markAdAsSeen(id);
+  const result = db.prepare('UPDATE ads_cache SET is_deleted = 1 WHERE id = ?').run(id);
+  if (result.changes === 0) {
+    db.prepare(`
+      INSERT INTO ads_cache (id, title, url, price, is_deleted)
+      VALUES (?, ?, ?, ?, 1)
+      ON CONFLICT(id) DO UPDATE SET is_deleted = 1
+    `).run(id, `Объявление ${id}`, `https://999.md/ru/${id}`, 'Цена не указана');
+  }
 }
 
 export function restoreAdFromTrash(id: string): void {
@@ -121,16 +174,23 @@ export function getSeenCount(): number {
   return row ? row.count : 0;
 }
 
-// Кэш объявлений для /browse и /list
-export function saveAdToCache(ad: FlatAd): void {
+export function getTrashCount(): number {
   const db = getDb();
-  const stmt = db.prepare(`
-    INSERT OR REPLACE INTO ads_cache (
-      id, title, price, url, images, description, author, agency,
-      rooms, area, floor, address, date, pets, amenities, is_translated
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+  const stmt = db.prepare('SELECT COUNT(*) as count FROM ads_cache WHERE is_deleted = 1');
+  const row = stmt.get() as { count: number };
+  return row ? row.count : 0;
+}
 
+export function getActiveAdsCount(): number {
+  const db = getDb();
+  const stmt = db.prepare('SELECT COUNT(*) as count FROM ads_cache WHERE is_deleted = 0');
+  const row = stmt.get() as { count: number };
+  return row ? row.count : 0;
+}
+
+// Кэш объявлений для /browse и /list (защищен от сброса корзины is_deleted)
+export function saveAdToCache(ad: FlatAd): void {
+  const stmt = getSaveAdStmt();
   stmt.run(
     ad.id,
     ad.title,
@@ -154,9 +214,27 @@ export function saveAdToCache(ad: FlatAd): void {
 export function saveManyAdsToCache(ads: FlatAd[]): void {
   if (ads.length === 0) return;
   const db = getDb();
+  const stmt = getSaveAdStmt();
   const insert = db.transaction((items: FlatAd[]) => {
     for (const ad of items) {
-      saveAdToCache(ad);
+      stmt.run(
+        ad.id,
+        ad.title,
+        ad.price,
+        ad.url,
+        JSON.stringify(ad.images || []),
+        ad.description || null,
+        ad.author || null,
+        ad.agency || null,
+        ad.rooms || null,
+        ad.area || null,
+        ad.floor || null,
+        ad.address || null,
+        ad.date || null,
+        ad.pets || null,
+        ad.amenities ? JSON.stringify(ad.amenities) : null,
+        ad.isTranslated ? 1 : 0
+      );
     }
   });
   insert(ads);
@@ -322,6 +400,7 @@ export function deleteSentMessageRecord(adId: string): void {
 }
 
 export function closeDb(): void {
+  saveAdStmt = null;
   if (dbInstance) {
     dbInstance.close();
     dbInstance = null;
