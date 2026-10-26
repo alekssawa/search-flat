@@ -49,7 +49,6 @@ export function getDb(): Database.Database {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
       CREATE INDEX IF NOT EXISTS idx_ads_cache_created ON ads_cache(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_ads_cache_posted ON ads_cache(posted_at DESC);
       CREATE TABLE IF NOT EXISTS active_chat_views (
         chat_id INTEGER,
         view_type TEXT,
