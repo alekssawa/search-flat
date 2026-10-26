@@ -12,6 +12,8 @@ export interface FlatAd {
   floor?: string;
   address?: string;
   date?: string;
+  postedAt?: string;
+  postedDate?: string;
   pets?: string;
   amenities?: string[];
   isTranslated?: boolean;
@@ -47,6 +49,8 @@ export interface RawAdvert {
   f_214?: FeatureValue; // С бытовой техникой
   f_154?: FeatureValue; // Автономное отопление
   f_182?: FeatureValue; // Кондиционер
+  posted?: string;
+  postedDate?: string;
   reseted?: string;
   state?: string;
   isExpired?: boolean;

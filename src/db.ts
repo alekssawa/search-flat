@@ -40,6 +40,8 @@ export function getDb(): Database.Database {
         floor TEXT,
         address TEXT,
         date TEXT,
+        posted_at TEXT,
+        posted_date TEXT,
         pets TEXT,
         amenities TEXT,
         is_translated INTEGER DEFAULT 0,
@@ -47,6 +49,7 @@ export function getDb(): Database.Database {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
       CREATE INDEX IF NOT EXISTS idx_ads_cache_created ON ads_cache(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_ads_cache_posted ON ads_cache(posted_at DESC);
       CREATE TABLE IF NOT EXISTS active_chat_views (
         chat_id INTEGER,
         view_type TEXT,
@@ -62,6 +65,19 @@ export function getDb(): Database.Database {
 
     try {
       dbInstance.exec('CREATE INDEX IF NOT EXISTS idx_ads_cache_deleted ON ads_cache(is_deleted);');
+    } catch {}
+
+    // Мягкая миграция: добавляем posted_at и posted_date для сортировки по дате создания на 999.md
+    try {
+      dbInstance.exec('ALTER TABLE ads_cache ADD COLUMN posted_at TEXT;');
+    } catch {}
+
+    try {
+      dbInstance.exec('ALTER TABLE ads_cache ADD COLUMN posted_date TEXT;');
+    } catch {}
+
+    try {
+      dbInstance.exec('CREATE INDEX IF NOT EXISTS idx_ads_cache_posted ON ads_cache(posted_at DESC);');
     } catch {}
   }
   return dbInstance;
@@ -106,8 +122,9 @@ function getSaveAdStmt(): Database.Statement {
     saveAdStmt = db.prepare(`
       INSERT INTO ads_cache (
         id, title, price, url, images, description, author, agency,
-        rooms, area, floor, address, date, pets, amenities, is_translated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        rooms, area, floor, address, date, pets, amenities, is_translated,
+        posted_at, posted_date
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         title = excluded.title,
         price = excluded.price,
@@ -131,7 +148,9 @@ function getSaveAdStmt(): Database.Statement {
           WHEN excluded.is_translated = 1 THEN 1
           WHEN ads_cache.is_translated = 1 THEN 1
           ELSE 0
-        END
+        END,
+        posted_at = COALESCE(excluded.posted_at, ads_cache.posted_at),
+        posted_date = COALESCE(excluded.posted_date, ads_cache.posted_date)
     `);
   }
   return saveAdStmt;
@@ -207,7 +226,9 @@ export function saveAdToCache(ad: FlatAd): void {
     ad.date || null,
     ad.pets || null,
     ad.amenities ? JSON.stringify(ad.amenities) : null,
-    ad.isTranslated ? 1 : 0
+    ad.isTranslated ? 1 : 0,
+    ad.postedAt || null,
+    ad.postedDate || null
   );
 }
 
@@ -233,7 +254,9 @@ export function saveManyAdsToCache(ads: FlatAd[]): void {
         ad.date || null,
         ad.pets || null,
         ad.amenities ? JSON.stringify(ad.amenities) : null,
-        ad.isTranslated ? 1 : 0
+        ad.isTranslated ? 1 : 0,
+        ad.postedAt || null,
+        ad.postedDate || null
       );
     }
   });
@@ -249,7 +272,7 @@ export function getCachedAdByIndex(index: number): { ad: FlatAd; total: number; 
   let safeIndex = index % total;
   if (safeIndex < 0) safeIndex += total;
 
-  const stmt = db.prepare('SELECT * FROM ads_cache WHERE is_deleted = 0 ORDER BY created_at DESC LIMIT 1 OFFSET ?');
+  const stmt = db.prepare('SELECT * FROM ads_cache WHERE is_deleted = 0 ORDER BY posted_at DESC NULLS LAST, created_at DESC, id DESC LIMIT 1 OFFSET ?');
   const row = stmt.get(safeIndex) as any;
   if (!row) return null;
 
@@ -267,6 +290,8 @@ export function getCachedAdByIndex(index: number): { ad: FlatAd; total: number; 
     floor: row.floor || undefined,
     address: row.address || undefined,
     date: row.date || undefined,
+    postedAt: row.posted_at || undefined,
+    postedDate: row.posted_date || undefined,
     pets: row.pets || undefined,
     amenities: row.amenities ? JSON.parse(row.amenities) : undefined,
     isTranslated: row.is_translated === 1,
@@ -284,7 +309,7 @@ export function getDeletedAdByIndex(index: number): { ad: FlatAd; total: number;
   let safeIndex = index % total;
   if (safeIndex < 0) safeIndex += total;
 
-  const stmt = db.prepare('SELECT * FROM ads_cache WHERE is_deleted = 1 ORDER BY created_at DESC LIMIT 1 OFFSET ?');
+  const stmt = db.prepare('SELECT * FROM ads_cache WHERE is_deleted = 1 ORDER BY posted_at DESC NULLS LAST, created_at DESC, id DESC LIMIT 1 OFFSET ?');
   const row = stmt.get(safeIndex) as any;
   if (!row) return null;
 
@@ -302,6 +327,8 @@ export function getDeletedAdByIndex(index: number): { ad: FlatAd; total: number;
     floor: row.floor || undefined,
     address: row.address || undefined,
     date: row.date || undefined,
+    postedAt: row.posted_at || undefined,
+    postedDate: row.posted_date || undefined,
     pets: row.pets || undefined,
     amenities: row.amenities ? JSON.parse(row.amenities) : undefined,
     isTranslated: row.is_translated === 1,
@@ -326,7 +353,7 @@ export function getCachedAdsPage(page: number, pageSize: number = 10): {
   if (safePage > totalPages) safePage = totalPages;
 
   const offset = (safePage - 1) * pageSize;
-  const stmt = db.prepare('SELECT * FROM ads_cache WHERE is_deleted = 0 ORDER BY created_at DESC LIMIT ? OFFSET ?');
+  const stmt = db.prepare('SELECT * FROM ads_cache WHERE is_deleted = 0 ORDER BY posted_at DESC NULLS LAST, created_at DESC, id DESC LIMIT ? OFFSET ?');
   const rows = stmt.all(pageSize, offset) as any[];
 
   const ads: FlatAd[] = rows.map((row) => ({
@@ -343,6 +370,8 @@ export function getCachedAdsPage(page: number, pageSize: number = 10): {
     floor: row.floor || undefined,
     address: row.address || undefined,
     date: row.date || undefined,
+    postedAt: row.posted_at || undefined,
+    postedDate: row.posted_date || undefined,
     pets: row.pets || undefined,
     amenities: row.amenities ? JSON.parse(row.amenities) : undefined,
     isTranslated: row.is_translated === 1,

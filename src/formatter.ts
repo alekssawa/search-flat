@@ -44,7 +44,12 @@ export function buildAdCaption(ad: FlatAd, maxCaptionLength: number = 1000): str
   if (ad.pets) {
     parts.push(`🐾 <b>Животные:</b> ${escapeHtml(ad.pets)}`);
   }
-  if (ad.date) {
+  if (ad.postedDate && ad.date && ad.postedDate !== ad.date) {
+    parts.push(`📅 <b>Создано:</b> ${escapeHtml(ad.postedDate)}`);
+    parts.push(`🕒 <b>Обновлено:</b> ${escapeHtml(ad.date)}`);
+  } else if (ad.postedDate) {
+    parts.push(`📅 <b>Создано:</b> ${escapeHtml(ad.postedDate)}`);
+  } else if (ad.date) {
     parts.push(`🕒 <b>Обновлено:</b> ${escapeHtml(ad.date)}`);
   }
 

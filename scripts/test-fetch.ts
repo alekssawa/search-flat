@@ -23,6 +23,7 @@ async function run() {
       console.log(`   Площадь   : ${ad.area || 'не указано'}`);
       console.log(`   Этаж      : ${ad.floor || 'не указано'}`);
       console.log(`   Адрес     : ${ad.address || 'не указано'}`);
+      console.log(`   Создано   : ${ad.postedDate || 'не указано'} (${ad.postedAt || 'нет ISO'})`);
       console.log(`   Обновлено : ${ad.date || 'не указано'}`);
       console.log(`   Фотографий: ${ad.images.length}`);
       if (ad.images.length > 0) {

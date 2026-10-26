@@ -9,6 +9,12 @@ query SearchAds($input: Ads_SearchInput!, $locale: Common_Locale) {
     ads {
       id
       title
+      posted(
+        input: {format: "2006-01-02 15:04:05", timezone: "Europe/Chisinau"}
+      )
+      postedDate: posted(
+        input: {format: "2 Jan. 2006, 15:04", locale: $locale, timezone: "Europe/Chisinau", getDiff: false}
+      )
       reseted(
         input: {format: "2 Jan. 2006, 15:04", locale: $locale, timezone: "Europe/Chisinau", getDiff: false}
       )
@@ -187,6 +193,8 @@ export function parseRawAdvert(raw: RawAdvert): FlatAd {
     floor,
     address: addressParts.length > 0 ? addressParts.join(', ') : undefined,
     date: raw.reseted,
+    postedAt: raw.posted,
+    postedDate: raw.postedDate,
     pets,
     amenities: amenities.length > 0 ? amenities : undefined,
   };

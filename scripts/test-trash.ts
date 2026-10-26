@@ -164,6 +164,53 @@ async function runTests() {
   }
   console.log('✅ Шаг 6: Удаление квартиры ad_999 (которой не было в кэше) корректно создало запись в корзине.');
 
+  // 7. Проверяем сортировку карусели по дате создания на сайте (postedAt)
+  const sortOld: FlatAd = {
+    id: 'sort_old',
+    title: 'Старая квартира (2024)',
+    price: '250 €',
+    url: 'https://999.md/ru/sort_old',
+    images: [],
+    postedAt: '2024-05-10 10:00:00',
+    postedDate: '10 мая 2024, 10:00',
+  };
+  const sortNew: FlatAd = {
+    id: 'sort_new',
+    title: 'Свежая квартира (сегодня)',
+    price: '400 €',
+    url: 'https://999.md/ru/sort_new',
+    images: [],
+    postedAt: '2026-10-26 10:00:00',
+    postedDate: '26 окт. 2026, 10:00',
+  };
+  const sortMid: FlatAd = {
+    id: 'sort_mid',
+    title: 'Средняя квартира (вчера)',
+    price: '350 €',
+    url: 'https://999.md/ru/sort_mid',
+    images: [],
+    postedAt: '2026-10-25 15:00:00',
+    postedDate: '25 окт. 2026, 15:00',
+  };
+
+  // Сохраняем в намеренно хаотичном порядке
+  saveManyAdsToCache([sortOld, sortNew, sortMid]);
+
+  const firstInCarousel = getCachedAdByIndex(0);
+  if (firstInCarousel?.ad.id !== 'sort_new') {
+    throw new Error(`Первой в карусели должна быть самая свежая квартира sort_new, получено: ${firstInCarousel?.ad.id}`);
+  }
+  const secondInCarousel = getCachedAdByIndex(1);
+  if (secondInCarousel?.ad.id !== 'sort_mid') {
+    throw new Error(`Второй в карусели должна быть sort_mid, получено: ${secondInCarousel?.ad.id}`);
+  }
+
+  const pageAds = getCachedAdsPage(1, 3);
+  if (pageAds.ads[0].id !== 'sort_new' || pageAds.ads[1].id !== 'sort_mid') {
+    throw new Error(`Список должен сортироваться от самых свежих к старым. Получено: ${pageAds.ads.map(a => a.id).join(', ')}`);
+  }
+  console.log('✅ Шаг 7: Карусель и список корректно сортируются по дате создания (postedAt) — самые свежие первыми.');
+
   console.log('\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ!');
   cleanup();
 }
